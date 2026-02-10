@@ -1,97 +1,149 @@
-# Excalidraw MCP App Server
+# Excalidraw CLI
 
-MCP server that streams hand-drawn Excalidraw diagrams with smooth viewport camera control and interactive fullscreen editing.
-
-![Demo](docs/demo.gif)
+Create hand-drawn Excalidraw diagrams from the command line. Generate `.excalidraw` files, manage diagram checkpoints, export to excalidraw.com, and reference the complete element format — all without leaving your terminal.
 
 ## Install
 
-Works with any client that supports [MCP Apps](https://modelcontextprotocol.io/docs/extensions/apps) — Claude, ChatGPT, VS Code, Goose, and others. If something doesn't work, please [open an issue](https://github.com/antonpk1/excalidraw-mcp-app/issues).
+```bash
+pnpm add -g excalidraw
+```
 
-### Remote (recommended)
-
-### `https://excalidraw-mcp-app.vercel.app/mcp`
-
-Add as a remote MCP server in your client. For example, in [claude.ai](https://claude.ai): **Settings** → **Connectors** → **Add custom connector** → paste the URL above.
-
-### Local
-
-**Option A: Download Extension**
-
-1. Download `excalidraw-mcp-app.mcpb` from [Releases](https://github.com/antonpk1/excalidraw-mcp-app/releases)
-2. Double-click to install in Claude Desktop
-
-**Option B: Build from Source**
+Or run directly:
 
 ```bash
-git clone https://github.com/antonpk1/excalidraw-mcp-app.git
-cd excalidraw-mcp-app
-npm install && npm run build
+npx excalidraw create --json '[...]'
 ```
-
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "excalidraw": {
-      "command": "node",
-      "args": ["/path/to/excalidraw-mcp-app/dist/index.js", "--stdio"]
-    }
-  }
-}
-```
-
-Restart Claude Desktop.
 
 ## Usage
 
-Example prompts:
-- "Draw a cute cat using excalidraw"
-- "Draw an architecture diagram showing a user connecting to an API server which talks to a database"
-
-## What are MCP Apps and how can I build one?
-
-Text responses can only go so far. Sometimes users need to interact with data, not just read about it. [MCP Apps](https://github.com/modelcontextprotocol/ext-apps/) is an official Model Context Protocol extension that lets servers return interactive HTML interfaces (data visualizations, forms, dashboards) that render directly in the chat.
-
-- **Getting started for humans**: [documentation](https://modelcontextprotocol.io/docs/extensions/apps)
-- **Getting started for AIs**: [skill](https://github.com/modelcontextprotocol/ext-apps/blob/main/plugins/mcp-apps/skills/create-mcp-app/SKILL.md)
-
-## Contributing
-
-PRs welcome! See [Local](#local) above for build instructions.
-
-### Deploy your own instance
-
-You can deploy your own copy to Vercel in a few clicks:
-
-1. Fork this repo
-2. Go to [vercel.com/new](https://vercel.com/new) and import your fork
-3. No environment variables needed — just deploy
-4. Your server will be at `https://your-project.vercel.app/mcp`
-
-### Release checklist
-
-<details>
-<summary>For maintainers</summary>
-
 ```bash
-# 1. Bump version in manifest.json and package.json
-# 2. Build and pack
-npm run build && mcpb pack .
-
-# 3. Create GitHub release
-gh release create v0.3.0 excalidraw-mcp-app.mcpb --title "v0.3.0" --notes "What changed"
-
-# 4. Deploy to Vercel
-vercel --prod
+excalidraw [command] [options]
 ```
 
-</details>
+### Commands
 
-## Credits
+#### `create` — Create a diagram
 
-Built with [Excalidraw](https://github.com/excalidraw/excalidraw) — a virtual whiteboard for sketching hand-drawn like diagrams.
+```bash
+# From a JSON file
+excalidraw create elements.json -o diagram.excalidraw
+
+# From inline JSON
+excalidraw create --json '[{"type":"rectangle","id":"r1","x":100,"y":100,"width":200,"height":100}]'
+
+# From stdin
+cat elements.json | excalidraw create -o output.excalidraw
+
+# From an existing .excalidraw file (re-process)
+excalidraw create existing.excalidraw -o new.excalidraw
+
+# Skip checkpoint saving
+excalidraw create elements.json --no-checkpoint
+```
+
+#### `export` — Upload to excalidraw.com
+
+```bash
+excalidraw export diagram.excalidraw
+# → https://excalidraw.com/#json=abc123,key
+```
+
+#### `reference` (alias: `ref`) — Element format cheat sheet
+
+```bash
+excalidraw reference       # Colorized output
+excalidraw ref --raw       # Raw markdown
+```
+
+#### `checkpoint` (alias: `cp`) — Manage diagram state
+
+```bash
+excalidraw checkpoint list                      # List all checkpoints
+excalidraw checkpoint save mydiagram file.excalidraw  # Save as named checkpoint
+excalidraw checkpoint load mydiagram -o out.excalidraw  # Restore from checkpoint
+excalidraw checkpoint remove mydiagram          # Delete a checkpoint
+```
+
+### Options
+
+```
+-v, --version    Output version number
+-h, --help       Display help
+--no-banner      Suppress ASCII art banner
+```
+
+## Programmatic API
+
+```typescript
+import {
+  createDiagram,
+  parseElements,
+  buildExcalidrawFile,
+  filterDrawElements,
+  resolveElements,
+  generateCheckpointId,
+  checkCameraAspectRatio,
+} from "excalidraw";
+
+import { FileCheckpointStore, MemoryCheckpointStore } from "excalidraw";
+import { exportToUrl } from "excalidraw";
+import { REFERENCE } from "excalidraw";
+```
+
+### Create a diagram
+
+```typescript
+const store = new MemoryCheckpointStore();
+const result = await createDiagram(
+  JSON.stringify([
+    { type: "rectangle", id: "r1", x: 100, y: 100, width: 200, height: 100 },
+  ]),
+  store,
+);
+
+// result.file — complete .excalidraw file object
+// result.checkpointId — unique ID for this diagram state
+// result.warnings — any validation warnings
+```
+
+### Export to excalidraw.com
+
+```typescript
+const url = await exportToUrl(JSON.stringify(excalidrawFileData));
+console.log(url); // https://excalidraw.com/#json=...
+```
+
+### Checkpoint management
+
+```typescript
+const store = new FileCheckpointStore(); // ~/.excalidraw/checkpoints/
+await store.save("my-diagram", { elements: [...] });
+const data = await store.load("my-diagram");
+const ids = await store.list();
+await store.remove("my-diagram");
+```
+
+## Element Format
+
+Run `excalidraw reference` for the complete element format reference, including:
+
+- **Color palettes** — primary colors, pastel fills, background zones, dark mode
+- **Element types** — rectangle, ellipse, diamond, text, arrow with all properties
+- **Labeled shapes** — auto-centered text with `label` property
+- **Arrow bindings** — connect shapes with `startBinding`/`endBinding`
+- **Camera sizing** — 4:3 aspect ratio presets (S/M/L/XL/XXL)
+- **Drawing order** — progressive element ordering for streaming
+- **Dark mode** — colors and setup for dark theme diagrams
+
+## Development
+
+```bash
+pnpm install
+pnpm run build    # Build with tsup
+pnpm run dev      # Watch mode
+pnpm run test     # Run tests with vitest
+pnpm run lint     # Type check with tsc
+```
 
 ## License
 

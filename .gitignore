@@ -1,6 +1,4 @@
 node_modules/
 dist/
 .DS_Store
-*.mcpb
-.vercel
-bun.lock
+pnpm-lock.yaml
