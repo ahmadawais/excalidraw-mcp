@@ -26,7 +26,10 @@ export class FileCheckpointStore implements CheckpointStore {
   private dir: string;
 
   constructor(dir?: string) {
-    this.dir = dir ?? path.join(os.homedir(), ".excalidraw", "checkpoints");
+    this.dir =
+      dir ??
+      process.env.EXCALIDRAW_CHECKPOINT_DIR ??
+      path.join(os.homedir(), ".excalidraw", "checkpoints");
     fs.mkdirSync(this.dir, { recursive: true });
   }
 

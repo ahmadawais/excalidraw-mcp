@@ -47,8 +47,12 @@ export function createCommand(): Command {
           // Not a .excalidraw file, treat as raw elements JSON
         }
       } else if (!process.stdin.isTTY) {
-        // Read from stdin
-        elementsJson = fs.readFileSync("/dev/stdin", "utf-8");
+        // Read from stdin (cross-platform)
+        const chunks: Buffer[] = [];
+        for await (const chunk of process.stdin) {
+          chunks.push(Buffer.from(chunk as Buffer));
+        }
+        elementsJson = Buffer.concat(chunks).toString("utf-8");
       } else {
         console.error(
           pc.red(
